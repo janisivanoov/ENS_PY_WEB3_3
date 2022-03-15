@@ -1,6 +1,5 @@
 import json
 import urllib.request
-#from mysql.connector import cursor
 import web3
 
 from web3 import Web3
@@ -104,7 +103,6 @@ def updateName(domain, address, block):
             finally:
                 my_cn.commit()
 
-#
 # initializing MySQL connection
 try:
   my_cn = mysql.connector.connect(**my_config)
