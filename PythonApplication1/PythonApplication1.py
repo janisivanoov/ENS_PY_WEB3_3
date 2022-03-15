@@ -13,6 +13,11 @@ ns = ENS.fromWeb3(w3)
 import mysql.connector
 from mysql.connector import errorcode
 
+eth_key = "7I39Q4ZZ6SER7ZZTKQMNGYHD3UTZ6BSQ32"
+eth_contract = "0x084b1c3c81545d370f3634392de611caabff8148"
+
+maxcount = 100
+
 # Initializing parameters
 my_config = {
   'user': 'ens_user',
@@ -60,38 +65,6 @@ rrabi = [
 rrcontract = w3.eth.contract(address = Web3.toChecksumAddress('0x3671aE578E63FdF66ad4F3E12CC0c0d71Ac7510C'), abi = rrabi)
 
 
-# Get transactions
-req = urllib.request.urlopen('https://api.etherscan.io/api?module=account&action=txlist&address=0x084b1c3c81545d370f3634392de611caabff8148&sort=desc&apikey=7I39Q4ZZ6SER7ZZTKQMNGYHD3UTZ6BSQ32')
-resp = req.read()
-tr = json.loads(resp)
-addresses = []
-i = 0
-for txh in tr["result"]:
-    
-    addresses.append(Web3.toChecksumAddress(txh["from"]))
-    i += 1
-    if i == 1000:
-        break
-
-
-names = rrcontract.functions.getNames(addresses).call()
-
-i = 0
-for n in names:
-    print(addresses[i] + "---" + n)
-    i += 1
-
-# initializing MySQL connection
-try:
-  my_cn = mysql.connector.connect(**my_config)
-except mysql.connector.Error as err:
-    print(err)
-    quit()
-else:
-  print ("Connected to the Database")
-
-cursor =  my_cn.cursor()
-
 # Function Reads First block    
 
 def getBlock():
@@ -104,44 +77,87 @@ def getBlock():
         start_block = (0,)
     return start_block[0]
 
-# Function updates last blosk
-def updateBlock(block):
-    u_block = "update ens.block set block = %s"
-    cursor.execute(u_block,[block])
-    my_cn.commit()
 
 # Function updates reverse registry table
 def updateName(domain, address, block):
     i_name = "insert into rev_registry (addr, name, block) values (%s, %s, %s)"
     u_name = "update rev_registry set name = %s, block=%s where addr = %s"
     d_name = "delete from rev_registry where addr = %s"
-    if domain == "None":
-        # delete name from the registry
-        cursor.execute(d_name, [address])
-        my_cn.commit()
-    else:
-        # insert or update
-        
-        try:
-            # attempt to insert
-            cursor.execute(i_name, [address, domain, block])
-        except mysql.connector.Error as err:
-            # update if record is there
-            if err.errno == 1062:
-                cursor.execute(u_name, [domain, block, address])
-            else:
-                print (err)
-                quit()
-        finally:
+    if domain != "":
+        if domain == "None":
+            # delete name from the registry
+            cursor.execute(d_name, [address])
             my_cn.commit()
+        else:
+            # insert or update
+        
+            try:
+                # attempt to insert
+                cursor.execute(i_name, [address, domain, block])
+            except mysql.connector.Error as err:
+                # update if record is there
+                if err.errno == 1062:
+                    cursor.execute(u_name, [domain, block, address])
+                else:
+                    print (err)
+                    quit()
+            finally:
+                my_cn.commit()
 
-# UpdateBlock (end_block)
+#
+# initializing MySQL connection
+try:
+  my_cn = mysql.connector.connect(**my_config)
+except mysql.connector.Error as err:
+    print(err)
+    quit()
+else:
+  print ("Connected to the Database")
 
+cursor =  my_cn.cursor()
+
+
+# Get transactions
+#req = urllib.request.urlopen('https://api.etherscan.io/api?module=account&action=txlist&address=0x084b1c3c81545d370f3634392de611caabff8148&sort=desc&apikey=7I39Q4ZZ6SER7ZZTKQMNGYHD3UTZ6BSQ32')
+url ='https://api.etherscan.io/api?module=account&action=txlist&address='+eth_contract+'&startblock='+str(getBlock())+'&sort=asc&apikey='+eth_key
+req = urllib.request.urlopen(url)
+resp = req.read()
+tr = json.loads(resp)
+
+# Arrays with transaction addresses and blocks
+addresses = []
+blocks = []
+
+# Saving/resolving with maxcount step
+i=0
+mmm = maxcount
 for txh in tr["result"]:
-    domain = ns.name(txh["from"])
-    print(txh["from"], " --- ", domain, " --- ", txh["blockNumber"])
-    # update
-    updateName(str(domain), str(txh["from"]), str(txh["blockNumber"]))
+    addresses.append(Web3.toChecksumAddress(txh["from"]))
+    blocks.append(txh["blockNumber"])
+    i += 1
 
+    if i == mmm:
+        mmm = mmm + maxcount
+        names = rrcontract.functions.getNames(addresses).call()
+
+        ii = 0
+        for n in names:
+            print(addresses[ii] + "---" + n)
+            updateName(str(n), str(addresses[ii]), str(blocks[ii]))
+            ii += 1
+        addresses = []
+        blocks = []
+
+names = rrcontract.functions.getNames(addresses).call()
+
+
+# Flushing the reminng addresses
+ii = 0
+for n in names:
+    print(addresses[ii] + "---" + n)
+    updateName(str(n), str(addresses[ii]), str(blocks[ii]))
+    ii += 1
+
+# Close the cursor and the connection
 cursor.close()
 my_cn.close()
