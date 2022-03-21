@@ -1,4 +1,5 @@
 import json
+from logging import error, exception
 import urllib.request
 import web3
 
@@ -58,8 +59,6 @@ rrabi = [
     "type": "function"
   }
 ]
-
-
 
 rrcontract = w3.eth.contract(address = Web3.toChecksumAddress('0x3671aE578E63FdF66ad4F3E12CC0c0d71Ac7510C'), abi = rrabi)
 
@@ -136,25 +135,31 @@ for txh in tr["result"]:
 
     if i == mmm:
         mmm = mmm + maxcount
-        names = rrcontract.functions.getNames(addresses).call()
-
-        ii = 0
-        for n in names:
-            print(addresses[ii] + "---" + n)
-            updateName(str(n), str(addresses[ii]), str(blocks[ii]))
-            ii += 1
-        addresses = []
-        blocks = []
-
-names = rrcontract.functions.getNames(addresses).call()
+        try:
+            names = rrcontract.functions.getNames(addresses).call()
+            ii = 0
+            for n in names:
+                print(addresses[ii] + "---" + n)
+                updateName(str(n), str(addresses[ii]), str(blocks[ii]))
+                ii += 1
+        except:
+            print("Exception. Cannot resolve names  " + addresses[0])
+        finally:
+            addresses = []
+            blocks = []
 
 
 # Flushing the reminng addresses
 ii = 0
-for n in names:
-    print(addresses[ii] + "---" + n)
-    updateName(str(n), str(addresses[ii]), str(blocks[ii]))
-    ii += 1
+try:
+   names = rrcontract.functions.getNames(addresses).call()
+
+   for n in names:
+        print(addresses[ii] + "---" + n)
+        updateName(str(n), str(addresses[ii]), str(blocks[ii]))
+        ii += 1
+except:
+   print("Exception. Cannot resolve names  "  + addresses[0])
 
 # Close the cursor and the connection
 cursor.close()
