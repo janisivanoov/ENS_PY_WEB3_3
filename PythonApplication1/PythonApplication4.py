@@ -2,6 +2,7 @@ import json
 from logging import error, exception
 import urllib.request
 import web3
+import hashlib
 
 from web3 import Web3
 from ens.auto import ENS
@@ -24,7 +25,7 @@ my_config = {
   'user': 'ens_user',
   'password': 'ens_password',
   'host': 'localhost',
-  'database': 'ens3',
+  'database': 'ens4',
   'raise_on_warnings': True
 }
 
@@ -80,8 +81,8 @@ def getBlock(contract):
 
 # Function updates reverse registry table
 def updateName(domain, address, eth_contract, block):
-    i_name = "insert into rev_registry (addr, name, contract, block) values (%s, %s, %s, %s)"
-    u_name = "update rev_registry set name = %s, contract = %s, block=%s where addr = %s"
+    i_name = "insert into rev_registry (addr, name, contract, block, hash) values (%s, %s, %s, %s, %s)"
+    u_name = "update rev_registry set name = %s, contract = %s, block=%s, hash = %s where addr = %s"
     d_name = "delete from rev_registry where addr = %s"
     if domain != "":
         if domain == "None":
@@ -93,16 +94,27 @@ def updateName(domain, address, eth_contract, block):
         
             try:
                 # attempt to insert
-                cursor.execute(i_name, [address, domain, eth_contract, block])
+                cursor.execute(i_name, [address, domain, eth_contract, block, hashlib.sha512(domain.encode('utf-8')).hexdigest()])
             except mysql.connector.Error as err:
                 # update if record is there
                 if err.errno == 1062:
-                    cursor.execute(u_name, [domain, eth_contract, block, address])
+                    cursor.execute(u_name, [domain, eth_contract, block, address, hashlib.sha512(domain.encode('utf-8')).hexdigest()])
                 else:
                     print (err)
                     quit()
             finally:
                 my_cn.commit()
+
+def updateNames(addresses, blocks, contracts):
+    try:
+            names = rrcontract.functions.getNames(addresses).call()
+            ii = 0
+            for n in names:
+                print(addresses[ii] + "---" + n)
+                updateName(str(n), str(addresses[ii]), str( contracts[ii]), str(blocks[ii]))
+                ii += 1
+    except BaseException as err:
+            print("Exception. Cannot resolve names  " + str(err))
 
 # initializing MySQL connection
 try:
@@ -134,6 +146,7 @@ for c in contracts:
     # Get transactions
     #req = urllib.request.urlopen('https://api.etherscan.io/api?module=account&action=txlist&address=0x084b1c3c81545d370f3634392de611caabff8148&sort=desc&apikey=7I39Q4ZZ6SER7ZZTKQMNGYHD3UTZ6BSQ32')
     url ='https://api.etherscan.io/api?module=account&action=txlist&address='+c[0]+'&startblock='+str(getBlock(c[0]))+'&sort=asc&apikey='+eth_key
+
     req = urllib.request.urlopen(url)
     resp = req.read()
     tr = json.loads(resp)
@@ -148,35 +161,40 @@ b = 0
 # loop with maxcount step
 while (b+maxcount<len(aaa)):
     #print(len(aaa[b:b+maxcount]-1))
-    addresses = aaa[b:b+maxcount]
-    blocks = bbb[b:b+maxcount]
-    contracts = ccc[b:b+maxcount]
+    #addresses = aaa[b:b+maxcount]
+    #blocks = bbb[b:b+maxcount]
+    #contracts = ccc[b:b+maxcount]
 
+    updateNames(aaa[b:b+maxcount], bbb[b:b+maxcount], ccc[b:b+maxcount])
     # resolving and saving stop
-    try:
-            names = rrcontract.functions.getNames(addresses).call()
-            ii = 0
-            for n in names:
-                print(addresses[ii] + "---" + n)
-                updateName(str(n), str(addresses[ii]), str( contracts[ii]), str(blocks[ii]))
-                ii += 1
-    except BaseException as err:
-            print("Exception. Cannot resolve names  " + str(err))
+    #try:
+    #        names = rrcontract.functions.getNames(addresses).call()
+    #        ii = 0
+    #        for n in names:
+    #            print(addresses[ii] + "---" + n)
+    #            updateName(str(n), str(addresses[ii]), str( contracts[ii]), str(blocks[ii]))
+    #            ii += 1
+    #except BaseException as err:
+    #        print("Exception. Cannot resolve names  " + str(err))
+    
     b += maxcount
 
 # resolving and saving remaining addresses
-addresses = aaa[b:len(aaa)-1]
-blocks = bbb[b:len(bbb)-1]
-contracts = ccc[b:len(ccc)-1]
-try:
-    names = rrcontract.functions.getNames(addresses).call()
-    ii = 0
-    for n in names:
-        print(addresses[ii] + "---" + n)
-        updateName(str(n), str(addresses[ii]), str( contracts[ii]), str(blocks[ii]))
-        ii += 1
-except BaseException as err:
-        print("Exception. Cannot resolve names  " + str(err))
+#addresses = aaa[b:len(aaa)-1]
+#blocks = bbb[b:len(bbb)-1]
+#contracts = ccc[b:len(ccc)-1]
+
+updateNames(aaa[b:len(aaa)-1], bbb[b:len(bbb)-1], ccc[b:len(ccc)-1])
+
+#try:
+#    names = rrcontract.functions.getNames(addresses).call()
+#    ii = 0
+#    for n in names:
+#        print(addresses[ii] + "---" + n)
+#        updateName(str(n), str(addresses[ii]), str( contracts[ii]), str(blocks[ii]))
+#        ii += 1
+#except BaseException as err:
+#        print("Exception. Cannot resolve names  " + str(err))#
 
         
 # Close the cursor and the connection
