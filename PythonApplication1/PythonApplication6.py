@@ -38,7 +38,7 @@ except mysql.connector.Error as err:
     print(err)
     quit()
 else:
-  print ("Connected to the Database")
+  print ("Connected to the Database #1")
 
 # initializing MySQL connection #2
 try:
@@ -47,11 +47,23 @@ except mysql.connector.Error as err:
     print(err)
     quit()
 else:
-  print ("Connected to the Database")
+  print ("Connected to the Database #2")
+
+
+# initializing MySQL connection #3
+try:
+  my_cn3 = mysql.connector.connect(**my_config)
+except mysql.connector.Error as err:
+    print(err)
+    quit()
+else:
+  print ("Connected to the Database #3")
+
 
 
 cursor =  my_cn.cursor() 
 cursor2 =  my_cn2.cursor()
+cursor3 = my_cn3.cursor()
 
 # Making a consolidated array of addresses
 
@@ -72,13 +84,19 @@ for c in cursor:
         my_cn2.commit()
         if addr != c[0]:
             print(c[0] + '---' + c[1] + '---' + str(addr) + '--- ERROR')
+            cursor3.execute('insert into audit (addr_reverse, addr_forward, name, message) values (%s, %s, %s, %s)', [ c[0], str(addr), c[1], 'ERROR' ])
+            my_cn3.commit()
         else:
             print(c[0] + '---' + c[1] + '---' + str(addr) + '--- OK')
     except BaseException as err:
         print(c[0] + '---' + c[1] + '---' + str(addr) + '--- Exception ' + str(err))
+        cursor3.execute('insert into audit (addr_reverse, addr_forward, name, message) values (%s, %s, %s, %s)', [ c[0], str(addr), c[1], 'Exception '+str(err) ])
+        my_cn3.commit()
     
 
-
+# Clean the database
+#cursor3.execulte('delete from ens4.rev_registry where addr in (select addr_reverse from audit);delete from ens4.audit;')
+#my_cn3.commit()
         
 # Close the cursor and the connection
 cursor.close()
@@ -86,3 +104,6 @@ my_cn.close()
 
 cursor2.close()
 my_cn2.close()
+
+cursor3.close()
+my_cn3.close()
